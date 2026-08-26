@@ -33,6 +33,7 @@ on_leave = [1 if a == 'L' else 0 for a in leaves]
 schedule = [-1]*(N*D)
         
 avail = [max_shifts]*N
+availsm = max_shifts*N
 streak = [0]*N
 last_shift = [0]*N # not needed? refer from schedule itself
 
@@ -41,7 +42,7 @@ curr_a_left = a
 curr_e_left = e
 curr_s = 0
 
-#RMAEB
+#RMAEB, R->0, M->1, A->2, E->3, B->4 , the corresponding bitmask is 2^(i)
 def get_shifts(nurse, day) :
     shifts = 1
     #if nurse is on leave or has worked for K consec days or all shifts are consumed then must REST
@@ -64,7 +65,7 @@ def get_shifts(nurse, day) :
     return shifts
     
 def solve(day, nurse_idx, nurses_mrv) :
-    global curr_m_left, curr_a_left, curr_e_left, curr_s
+    global curr_m_left, curr_a_left, curr_e_left, curr_s, availsm
     
     if nurse_idx == N :
         if curr_m_left == 0 and curr_a_left == 0 and curr_e_left == 0 :
@@ -86,10 +87,12 @@ def solve(day, nurse_idx, nurses_mrv) :
                 curr_m_left = curr_a_left = curr_e_left = 0
                 
         return False
-    
+    net_shifts_req = (D-1-day)*(m+a+e) + curr_a_left+curr_e_left+curr_m_left
+    if availsm < net_shifts_req:
+      return False
     if curr_m_left + curr_a_left + curr_e_left > (N-nurse_idx)*(1+surgical_day[day]) :
         return False
-    if curr_e_left > N-nurse_idx :
+    if curr_e_left > N-nurse_idx or curr_a_left > N-nurse_idx or curr_m_left > N-nurse_idx:
         return False 
     
     nurse = nurses_mrv[nurse_idx]
@@ -103,6 +106,7 @@ def solve(day, nurse_idx, nurses_mrv) :
         
         schedule[nurse*D+day] = 4
         avail[nurse] -= 2
+        availsm-=2
         streak[nurse] += 1
         last_shift[nurse] = 4
         
@@ -121,6 +125,7 @@ def solve(day, nurse_idx, nurses_mrv) :
         last_shift[nurse] = last
         streak[nurse] -= 1
         avail[nurse] += 2
+        availsm+=2
         schedule[nurse*D+day] = -1
         
     # LCV
@@ -139,13 +144,14 @@ def solve(day, nurse_idx, nurses_mrv) :
         last_shift[nurse] = last
         streak[nurse] = prev
         schedule[nurse*D+day] = -1
-    # never rest now
     
+    # can never rest now
     if curr_e_left >= max(curr_m_left,curr_a_left) and curr_e_left > 0 and ((shifts >> 3)&1) == 1 :
         last = last_shift[nurse]
         
         schedule[nurse*D+day] = 3
         avail[nurse] -= 1
+        availsm-=1
         streak[nurse] += 1
         last_shift[nurse] = 3
         
@@ -160,9 +166,12 @@ def solve(day, nurse_idx, nurses_mrv) :
         last_shift[nurse] = last
         streak[nurse] -= 1
         avail[nurse] += 1
+        availsm+=1
         schedule[nurse*D+day] = -1
     
-    if N-1-nurse_idx-curr_e_left < curr_m_left + curr_a_left and curr_m_left > 0 and curr_a_left > 0 :
+    if N-nurse_idx-curr_e_left < curr_m_left + curr_a_left and (curr_m_left == 0 or curr_a_left == 0) :
+      return False
+    if N-nurse_idx-curr_e_left < curr_m_left + curr_a_left and curr_m_left > 0 and curr_a_left > 0 :
         if surgical_day[day] == 0 :
             return False
         
@@ -172,6 +181,7 @@ def solve(day, nurse_idx, nurses_mrv) :
             
             schedule[nurse*D+day] = 4
             avail[nurse] -= 2
+            availsm-=2
             streak[nurse] += 1
             last_shift[nurse] = 4
             
@@ -191,6 +201,7 @@ def solve(day, nurse_idx, nurses_mrv) :
             last_shift[nurse] = last
             streak[nurse] -= 1
             avail[nurse] += 2
+            availsm+=2
             schedule[nurse*D+day] = -1
         
     if curr_a_left >= curr_m_left and curr_a_left > 0 and ((shifts >> 2)&1) == 1 :
@@ -198,6 +209,7 @@ def solve(day, nurse_idx, nurses_mrv) :
         
         schedule[nurse*D+day] = 2
         avail[nurse] -= 1
+        availsm-=1
         streak[nurse] += 1
         last_shift[nurse] = 2
         
@@ -212,6 +224,7 @@ def solve(day, nurse_idx, nurses_mrv) :
         last_shift[nurse] = last
         streak[nurse] -= 1
         avail[nurse] += 1
+        availsm+=1
         schedule[nurse*D+day] = -1
     
     # M
@@ -220,6 +233,7 @@ def solve(day, nurse_idx, nurses_mrv) :
             
         schedule[nurse*D+day] = 1
         avail[nurse] -= 1
+        availsm-=1
         streak[nurse] += 1
         last_shift[nurse] = 1
         
@@ -233,6 +247,7 @@ def solve(day, nurse_idx, nurses_mrv) :
         last_shift[nurse] = last
         streak[nurse] -= 1
         avail[nurse] += 1
+        availsm+=1
         schedule[nurse*D+day] = -1
     
     # A
@@ -241,6 +256,7 @@ def solve(day, nurse_idx, nurses_mrv) :
         
         schedule[nurse*D+day] = 2
         avail[nurse] -= 1
+        availsm-=1
         streak[nurse] += 1
         last_shift[nurse] = 2
         
@@ -255,6 +271,7 @@ def solve(day, nurse_idx, nurses_mrv) :
         last_shift[nurse] = last
         streak[nurse] -= 1
         avail[nurse] += 1
+        availsm+=1
         schedule[nurse*D+day] = -1
         
     # E
@@ -263,6 +280,7 @@ def solve(day, nurse_idx, nurses_mrv) :
         
         schedule[nurse*D+day] = 3
         avail[nurse] -= 1
+        availsm-=1
         streak[nurse] += 1
         last_shift[nurse] = 3
         
@@ -277,6 +295,7 @@ def solve(day, nurse_idx, nurses_mrv) :
         last_shift[nurse] = last
         streak[nurse] -= 1
         avail[nurse] += 1
+        availsm+=1
         schedule[nurse*D+day] = -1
     
     # B
@@ -286,6 +305,7 @@ def solve(day, nurse_idx, nurses_mrv) :
         
         schedule[nurse*D+day] = 4
         avail[nurse] -= 2
+        availsm-=2
         streak[nurse] += 1
         last_shift[nurse] = 4
         
@@ -304,6 +324,7 @@ def solve(day, nurse_idx, nurses_mrv) :
         last_shift[nurse] = last
         streak[nurse] -= 1
         avail[nurse] += 2
+        availsm+=2
         schedule[nurse*D+day] = -1
     
     return False
