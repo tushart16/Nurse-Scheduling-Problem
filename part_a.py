@@ -41,6 +41,7 @@ curr_m_left = m
 curr_a_left = a
 curr_e_left = e
 curr_s = 0
+curr_unassigned_surg = Ns
 
 #RMAEB, R->0, M->1, A->2, E->3, B->4 , the corresponding bitmask is 2^(i)
 def get_shifts(nurse, day) :
@@ -65,7 +66,7 @@ def get_shifts(nurse, day) :
     return shifts
     
 def solve(day, nurse_idx, nurses_mrv) :
-    global curr_m_left, curr_a_left, curr_e_left, curr_s, availsm
+    global curr_m_left, curr_a_left, curr_e_left, curr_s, availsm, curr_unassigned_surg
     
     if nurse_idx == N :
         if curr_m_left == 0 and curr_a_left == 0 and curr_e_left == 0 :
@@ -80,11 +81,14 @@ def solve(day, nurse_idx, nurses_mrv) :
                 curr_a_left = a
                 curr_e_left = e
                 curr_s = 0
+                prev_unassigned_surg = curr_unassigned_surg
+                curr_unassigned_surg = Ns
                 if solve(day+1,0,next_nurses_mrv) :
                     return True
                 
                 curr_s = surgical_day[day]
                 curr_m_left = curr_a_left = curr_e_left = 0
+                curr_unassigned_surg = prev_unassigned_surg
                 
         return False
     net_shifts_req = (D-1-day)*(m+a+e) + curr_a_left+curr_e_left+curr_m_left
@@ -94,12 +98,17 @@ def solve(day, nurse_idx, nurses_mrv) :
         return False
     if curr_e_left > N-nurse_idx or curr_a_left > N-nurse_idx or curr_m_left > N-nurse_idx:
         return False 
+    curr_unassigned_gen = N-nurse_idx-curr_unassigned_surg
+    max_poss = (curr_unassigned_surg*2+ curr_unassigned_gen) if surgical_day[day]==1 else (curr_unassigned_surg+curr_unassigned_gen)
+    if max_poss < curr_a_left+curr_e_left+curr_m_left:
+      return False
     
     nurse = nurses_mrv[nurse_idx]
     shifts = get_shifts(nurse,day)
     
     checked = 0
-    
+    is_surgical = ( 1 if nurse<Ns else 0)
+    curr_unassigned_surg -= is_surgical
     #check if surgical day and no surgical nurses yet
     if surgical_day[day] == 1 and curr_s == 0 and curr_m_left > 0 and curr_a_left > 0 and ((shifts >> 4)&1) == 1:
         last = last_shift[nurse]
@@ -170,9 +179,11 @@ def solve(day, nurse_idx, nurses_mrv) :
         schedule[nurse*D+day] = -1
     
     if N-nurse_idx-curr_e_left < curr_m_left + curr_a_left and (curr_m_left == 0 or curr_a_left == 0) :
+      curr_unassigned_surg+= is_surgical
       return False
     if N-nurse_idx-curr_e_left < curr_m_left + curr_a_left and curr_m_left > 0 and curr_a_left > 0 :
         if surgical_day[day] == 0 :
+            curr_unassigned_surg+= is_surgical
             return False
         
         if ((shifts >> 4)&1) == 1 and ((checked >> 4)&1) == 0 :
@@ -326,7 +337,8 @@ def solve(day, nurse_idx, nurses_mrv) :
         avail[nurse] += 2
         availsm+=2
         schedule[nurse*D+day] = -1
-    
+        
+    curr_unassigned_surg+= is_surgical
     return False
     
 
