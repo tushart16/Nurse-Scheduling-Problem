@@ -29,19 +29,12 @@ N, D, Ns, Ng, m, a, e, T, days, max_shifts, leaves = parse_input(sys.argv[1])
 
 surgical_day = [1 if d == 'S' else 0 for d in days]
 on_leave = [1 if a == 'L' else 0 for a in leaves]
-    
+surgical_avail = [Ns]*D
+gen_avail = [Ng]*D
 schedule = [-1]*(N*D)
-        
-avail = [max_shifts]*N
-availsm = max_shifts*N
-streak = [0]*N
-last_shift = [0]*N # not needed? refer from schedule itself
 
-curr_m_left = m
-curr_a_left = a
-curr_e_left = e
-curr_s = 0
-curr_unassigned_surg = Ns
+avail = [max_shifts]*N
+streak = [0]*N
 
 #RMAEB, R->0, M->1, A->2, E->3, B->4 , the corresponding bitmask is 2^(i)
 def get_shifts(nurse, day) :
@@ -50,295 +43,180 @@ def get_shifts(nurse, day) :
     if on_leave[nurse*D + day] == 1 or streak[nurse] == 5 or avail[nurse] == 0 : 
         return shifts
     
+    if day == 0 :
+        shifts |= 2
+        shifts |= 4
+        shifts |= 8
+        
+        if nurse < Ns and avail[nurse] >= 2 and surgical_day[day] == 1:
+            shifts |= 16
+        return shifts
+
     #always available to work in E shift
     shifts |= 8
     
     #nurse can work in M or B shift iff prev shift was A or R
-    if last_shift[nurse] == 0 or last_shift[nurse] == 2 : 
+    if schedule[nurse*D + day-1] == 0 or schedule[nurse*D + day-1] == 2 : 
         shifts |= 2
         if nurse < Ns and avail[nurse] >= 2 and surgical_day[day] == 1:
             shifts |= 16
     
     #nurse can work in A shift iff prev shift was not B
-    if last_shift[nurse] != 4 : 
+    if schedule[nurse*D + day-1] != 4 : 
         shifts |= 4
         
     return shifts
     
-def solve(day, nurse_idx, nurses_mrv) :
-    global curr_m_left, curr_a_left, curr_e_left, curr_s, availsm, curr_unassigned_surg
-    
+def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, curr_s, curr_surg_left, avail_shifts_sum, curr_gen_left) :    
     if nurse_idx == N :
         if curr_m_left == 0 and curr_a_left == 0 and curr_e_left == 0 :
             if surgical_day[day] == curr_s :
                 if day == D - 1: 
                     return True
                 
-                # MRV
-                next_nurses_mrv = sorted(range(N), key = lambda i : (get_shifts(i,day+1).bit_count(), i >= Ns)) #same count later
+                next = sorted(range(N), key=lambda i: (get_shifts(i, day+1).bit_count(), i >= Ns))
                 
-                curr_m_left = m
-                curr_a_left = a
-                curr_e_left = e
-                curr_s = 0
-                prev_unassigned_surg = curr_unassigned_surg
-                curr_unassigned_surg = Ns
-                if solve(day+1,0,next_nurses_mrv) :
+                if solve(day+1,0,next,m,a,e,0,surgical_avail[day+1],avail_shifts_sum,gen_avail[day+1]) :
                     return True
                 
-                curr_s = surgical_day[day]
-                curr_m_left = curr_a_left = curr_e_left = 0
-                curr_unassigned_surg = prev_unassigned_surg
-                
         return False
-    net_shifts_req = (D-1-day)*(m+a+e) + curr_a_left+curr_e_left+curr_m_left
-    if availsm < net_shifts_req:
-      return False
-    if curr_m_left + curr_a_left + curr_e_left > (N-nurse_idx)*(1+surgical_day[day]) :
-        return False
-    if curr_e_left > N-nurse_idx or curr_a_left > N-nurse_idx or curr_m_left > N-nurse_idx:
-        return False 
-    curr_unassigned_gen = N-nurse_idx-curr_unassigned_surg
-    max_poss = (curr_unassigned_surg*2+ curr_unassigned_gen) if surgical_day[day]==1 else (curr_unassigned_surg+curr_unassigned_gen)
-    if max_poss < curr_a_left+curr_e_left+curr_m_left:
-      return False
     
-    nurse = nurses_mrv[nurse_idx]
-    shifts = get_shifts(nurse,day)
-    
-    checked = 0
-    is_surgical = ( 1 if nurse<Ns else 0)
-    curr_unassigned_surg -= is_surgical
-    #check if surgical day and no surgical nurses yet
-    if surgical_day[day] == 1 and curr_s == 0 and curr_m_left > 0 and curr_a_left > 0 and ((shifts >> 4)&1) == 1:
-        last = last_shift[nurse]
-        
-        schedule[nurse*D+day] = 4
-        avail[nurse] -= 2
-        availsm-=2
-        streak[nurse] += 1
-        last_shift[nurse] = 4
-        
-        curr_m_left -= 1
-        curr_a_left -= 1
-        curr_s = 1
-        
-        if(solve(day,nurse_idx+1,nurses_mrv)) : 
-            return True
-        
-        checked |= 16
-        curr_s = 0
-        curr_a_left += 1
-        curr_m_left += 1
-        
-        last_shift[nurse] = last
-        streak[nurse] -= 1
-        avail[nurse] += 2
-        availsm+=2
-        schedule[nurse*D+day] = -1
-        
-    # LCV
-    # checking if R can be assigned
-    if (N-1-nurse_idx >= curr_e_left) and (N-1-nurse_idx-curr_e_left)*(1+surgical_day[day]) >= curr_m_left + curr_a_left :
-        prev = streak[nurse]
-        last = last_shift[nurse]
-        
-        schedule[nurse*D+day] = 0
-        streak[nurse] = 0
-        last_shift[nurse] = 0
-        
-        if(solve(day,nurse_idx+1,nurses_mrv)) : 
-            return True
-        
-        last_shift[nurse] = last
-        streak[nurse] = prev
-        schedule[nurse*D+day] = -1
-    
-    # can never rest now
-    if curr_e_left >= max(curr_m_left,curr_a_left) and curr_e_left > 0 and ((shifts >> 3)&1) == 1 :
-        last = last_shift[nurse]
-        
-        schedule[nurse*D+day] = 3
-        avail[nurse] -= 1
-        availsm-=1
-        streak[nurse] += 1
-        last_shift[nurse] = 3
-        
-        curr_e_left -= 1
-        
-        if(solve(day,nurse_idx+1,nurses_mrv)) : 
-            return True
-        
-        checked |= 8
-        curr_e_left += 1
-        
-        last_shift[nurse] = last
-        streak[nurse] -= 1
-        avail[nurse] += 1
-        availsm+=1
-        schedule[nurse*D+day] = -1
-    
-    if N-nurse_idx-curr_e_left < curr_m_left + curr_a_left and (curr_m_left == 0 or curr_a_left == 0) :
-      curr_unassigned_surg+= is_surgical
-      return False
-    if N-nurse_idx-curr_e_left < curr_m_left + curr_a_left and curr_m_left > 0 and curr_a_left > 0 :
-        if surgical_day[day] == 0 :
-            curr_unassigned_surg+= is_surgical
+    if curr_m_left == 0 and curr_a_left == 0 and curr_e_left == 0 :
+        if surgical_day[day] == 1 and curr_s == 0 :
             return False
         
-        if ((shifts >> 4)&1) == 1 and ((checked >> 4)&1) == 0 :
-            last = last_shift[nurse]
-            prev = curr_s
+        nurse = nurses_mrv[nurse_idx]
+        prev_streak = streak[nurse]
+        schedule[nurse*D + day] = 0
+        streak[nurse] = 0
+        next_curr_surg_left = curr_surg_left - (nurse < Ns)*(1-on_leave[nurse*D + day])
+        next_curr_gen_left = curr_gen_left - (nurse >= Ns)*(1-on_leave[nurse*D + day])
+        if solve(day,nurse_idx+1,nurses_mrv,0,0,0,curr_s,next_curr_surg_left,avail_shifts_sum,next_curr_gen_left) :
+            return True
+        else :
+            schedule[nurse*D + day] = -1
+            streak[nurse] = prev_streak
+            return False
+    
+    net_shifts_req = (D-1-day)*(m+a+e) + curr_a_left+curr_e_left+curr_m_left
+    if avail_shifts_sum < net_shifts_req:
+        return False
+    
+    total_nurses = curr_surg_left + curr_gen_left
+    if curr_m_left > total_nurses or curr_a_left > total_nurses or curr_e_left > total_nurses:
+        return False
+     
+    nurse = nurses_mrv[nurse_idx]
+    if curr_a_left+curr_e_left+curr_m_left > (curr_surg_left*(1+surgical_day[day])+ curr_gen_left) :
+        return False
+  
+    if surgical_day[day] == 1 and curr_s == 0 and curr_surg_left == 0:
+        return False
+    
+    if total_nurses-curr_e_left < curr_m_left + curr_a_left and (curr_m_left == 0 or curr_a_left == 0 or surgical_day[day] == 0 or curr_surg_left == 0) :
+        return False
+    
+    shifts = get_shifts(nurse,day)
+    check_shifts = []
+    
+    ev_slots = min(curr_gen_left+(nurse<Ns)*(1-on_leave[nurse*D + day]),curr_e_left)
+    surg_nurse_ma = curr_surg_left - (nurse<Ns)*(1-on_leave[nurse*D + day]) - (curr_e_left-ev_slots)
+    ma_slots = (curr_gen_left+(nurse<Ns)*(1-on_leave[nurse*D + day]) - ev_slots) + surg_nurse_ma*(1+surgical_day[day])
+    #check if surgical day and no surgical nurses yet or need it to fulfill slots
+    if surgical_day[day] == 1 and (curr_s == 0 or ma_slots < curr_m_left + curr_a_left) and curr_m_left > 0 and curr_a_left > 0 and (shifts&16) :                
+        check_shifts.append(4)
+       
+    # R 
+    ev_slots = min(curr_gen_left-(nurse>=Ns)*(1-on_leave[nurse*D + day]),curr_e_left)
+    surg_nurse_ma = curr_surg_left - (nurse<Ns)*(1-on_leave[nurse*D + day]) - (curr_e_left-ev_slots)
+    ma_slots = (curr_gen_left - (nurse>=Ns)*(1-on_leave[nurse*D + day]) - ev_slots) + surg_nurse_ma*(1+surgical_day[day])
+    if (total_nurses - (1-on_leave[nurse*D + day]) >= curr_e_left) and ma_slots >= curr_m_left + curr_a_left :
+        check_shifts.append(0)
+        
+    if curr_e_left >= max(curr_m_left, curr_a_left) :
+        if (shifts&8) :
+            check_shifts.append(3)
+        if curr_a_left >= curr_m_left :
+            if (shifts&4) :
+                check_shifts.append(2)
+            if (shifts&2) :
+                check_shifts.append(1)
+        else :
+            if (shifts&2) :
+                check_shifts.append(1)
+            if (shifts&4) :
+                check_shifts.append(2)
+    elif curr_a_left >= max(curr_m_left, curr_e_left) :
+        if (shifts&4) :
+            check_shifts.append(2)
+        if curr_e_left >= curr_m_left :
+            if (shifts&8) :
+                check_shifts.append(3)
+            if (shifts&2) :
+                check_shifts.append(1)
+        else :
+            if (shifts&2) :
+                check_shifts.append(1)
+            if (shifts&8) :
+                check_shifts.append(3)
+    else :
+        if (shifts&2) :
+            check_shifts.append(1)
+        if curr_e_left >= curr_a_left :
+            if (shifts&8) :
+                check_shifts.append(3)
+            if (shifts&4) :
+                check_shifts.append(2)
+        else :
+            if (shifts&4) :
+                check_shifts.append(2)
+            if (shifts&8) :
+                check_shifts.append(3)
             
-            schedule[nurse*D+day] = 4
-            avail[nurse] -= 2
-            availsm-=2
+        
+    if 4 not in check_shifts and (shifts&16) and curr_m_left > 0 and curr_a_left > 0 :
+        check_shifts.append(4)
+    
+    for s in check_shifts :
+        prev_streak = streak[nurse]
+        schedule[nurse*D + day] = s
+        
+        next_curr_surg_left = curr_surg_left - (nurse < Ns)*(1-on_leave[nurse*D + day])
+        next_curr_gen_left = curr_gen_left - (nurse >= Ns)*(1-on_leave[nurse*D + day])
+        
+        next_avail_shifts_sum = avail_shifts_sum
+        next_curr_m_left = curr_m_left
+        next_curr_a_left = curr_a_left
+        next_curr_e_left = curr_e_left
+        if s == 0 :
+            streak[nurse] = 0
+        else :
+            avail[nurse] -= 1
+            next_avail_shifts_sum -= 1
             streak[nurse] += 1
-            last_shift[nurse] = 4
-            
-            curr_m_left -= 1
-            curr_a_left -= 1
-            curr_s = 1
-            
-            if(solve(day,nurse_idx+1,nurses_mrv)) : 
-                return True
-            
-            curr_s = prev
-            curr_a_left += 1
-            curr_m_left += 1
-            
-            checked |= 16
-            
-            last_shift[nurse] = last
-            streak[nurse] -= 1
-            avail[nurse] += 2
-            availsm+=2
-            schedule[nurse*D+day] = -1
-        
-    if curr_a_left >= curr_m_left and curr_a_left > 0 and ((shifts >> 2)&1) == 1 :
-        last = last_shift[nurse]
-        
-        schedule[nurse*D+day] = 2
-        avail[nurse] -= 1
-        availsm-=1
-        streak[nurse] += 1
-        last_shift[nurse] = 2
-        
-        curr_a_left -= 1
-        
-        if(solve(day,nurse_idx+1,nurses_mrv)) : 
-            return True
-        
-        checked |= 4
-        curr_a_left += 1
-        
-        last_shift[nurse] = last
-        streak[nurse] -= 1
-        avail[nurse] += 1
-        availsm+=1
-        schedule[nurse*D+day] = -1
+            if s == 1 :
+                next_curr_m_left -= 1
+            elif s == 2 :
+                next_curr_a_left -= 1
+            elif s == 3 :
+                next_curr_e_left -= 1
+            else :
+                next_curr_m_left -= 1
+                next_curr_a_left -= 1
+                avail[nurse] -= 1
+                next_avail_shifts_sum -= 1
+
+        next_curr_s = curr_s
+        if s == 4 :
+            next_curr_s = 1
     
-    # M
-    if((shifts >> 1)&1) == 1 and curr_m_left > 0 :
-        last = last_shift[nurse]
-            
-        schedule[nurse*D+day] = 1
-        avail[nurse] -= 1
-        availsm-=1
-        streak[nurse] += 1
-        last_shift[nurse] = 1
-        
-        curr_m_left -= 1
-        
-        if(solve(day,nurse_idx+1,nurses_mrv)) : 
+        if(solve(day,nurse_idx+1,nurses_mrv,next_curr_m_left,next_curr_a_left,next_curr_e_left,next_curr_s,next_curr_surg_left,next_avail_shifts_sum,next_curr_gen_left)) : 
             return True
         
-        curr_m_left += 1
+        avail[nurse] += (s != 0) + (s == 4)
+        schedule[nurse*D + day] = -1
+        streak[nurse] = prev_streak
         
-        last_shift[nurse] = last
-        streak[nurse] -= 1
-        avail[nurse] += 1
-        availsm+=1
-        schedule[nurse*D+day] = -1
-    
-    # A
-    if((shifts >> 2)&1) == 1 and curr_a_left > 0 and ((checked >> 2)&1) == 0 :
-        last = last_shift[nurse]
-        
-        schedule[nurse*D+day] = 2
-        avail[nurse] -= 1
-        availsm-=1
-        streak[nurse] += 1
-        last_shift[nurse] = 2
-        
-        curr_a_left -= 1
-        
-        if(solve(day,nurse_idx+1,nurses_mrv)) : 
-            return True
-        
-        checked |= 4
-        curr_a_left += 1
-        
-        last_shift[nurse] = last
-        streak[nurse] -= 1
-        avail[nurse] += 1
-        availsm+=1
-        schedule[nurse*D+day] = -1
-        
-    # E
-    if((shifts >> 3)&1) == 1 and curr_e_left > 0 and ((checked >> 3)&1) == 0 :
-        last = last_shift[nurse]
-        
-        schedule[nurse*D+day] = 3
-        avail[nurse] -= 1
-        availsm-=1
-        streak[nurse] += 1
-        last_shift[nurse] = 3
-        
-        curr_e_left -= 1
-        
-        if(solve(day,nurse_idx+1,nurses_mrv)) : 
-            return True
-        
-        checked |= 8
-        curr_e_left += 1
-        
-        last_shift[nurse] = last
-        streak[nurse] -= 1
-        avail[nurse] += 1
-        availsm+=1
-        schedule[nurse*D+day] = -1
-    
-    # B
-    if ((shifts >> 4)&1) == 1 and curr_m_left > 0 and curr_a_left > 0 and ((checked >> 4)&1) == 0 :
-        last = last_shift[nurse]
-        prev = curr_s
-        
-        schedule[nurse*D+day] = 4
-        avail[nurse] -= 2
-        availsm-=2
-        streak[nurse] += 1
-        last_shift[nurse] = 4
-        
-        curr_m_left -= 1
-        curr_a_left -= 1
-        curr_s = 1
-        
-        if(solve(day,nurse_idx+1,nurses_mrv)) : 
-            return True
-        
-        checked |= 16
-        curr_s = prev
-        curr_a_left += 1
-        curr_m_left += 1
-        
-        last_shift[nurse] = last
-        streak[nurse] -= 1
-        avail[nurse] += 2
-        availsm+=2
-        schedule[nurse*D+day] = -1
-        
-    curr_unassigned_surg+= is_surgical
     return False
     
 
@@ -357,10 +235,18 @@ def shift_int_str(s) :
 if __name__ == '__main__':     
     nurses = [i for i in range(N)]
     
+    for n in range(0,Ns) :
+        for d in range(0,D) :
+            surgical_avail[d] -= on_leave[n*D+d]
+            
+    for n in range(Ns,N) :
+        for d in range(0,D) :
+            gen_avail[d] -= on_leave[n*D+d]
+
     output_file = sys.argv[2]
     result = {}
     start_time = time.time()
-    if solve(0,0,nurses) :
+    if solve(0,0,nurses,m,a,e,0,surgical_avail[0],max_shifts*N,gen_avail[0]) :
         end_time=time.time()
         print(end_time-start_time)
         for day in range(D):
