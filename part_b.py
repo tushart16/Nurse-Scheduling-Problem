@@ -35,6 +35,7 @@ schedule = [-1]*(N*D)
 avail = [max_shifts]*N
 streak = [0]*N
 curr_min_cost = 1e9
+best_schedule = [-1]*(N*D)
 
 #RMAEB, R->0, M->1, A->2, E->3, B->4 , the corresponding bitmask is 2^(i)
 def get_shifts(nurse, day) :
@@ -67,13 +68,38 @@ def get_shifts(nurse, day) :
         
     return shifts
     
-def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, curr_s, curr_surg_left, avail_shifts_sum, curr_gen_left) :    
+def calculate_cost():
+  m_cnt = 0
+  e_cnt = 0
+  a_cnt = 0
+  cost = 0
+  for nurse in range(0,N):
+    for day in range(0,D):
+      i = schedule[nurse*D + day]
+      if i==1 or i==4:
+        m_cnt+=1
+      elif i==2 or i==4:
+        a_cnt+=1
+      else:
+        e_cnt+=1
+    cost += 3*(m_cnt ** 2 + a_cnt ** 2 + e_cnt ** 2) - (m_cnt+a_cnt+e_cnt) ** 2
+  return cost
+  
+  
+def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, curr_s, curr_surg_left, avail_shifts_sum, curr_gen_left) : 
+    global  curr_min_cost,best_schedule
+    if time.time() - start_time > 60:
+        return True
     if nurse_idx == N :
         if curr_m_left == 0 and curr_a_left == 0 and curr_e_left == 0 :
             if surgical_day[day] == curr_s :
                 if day == D - 1: 
-                    
-                    return True
+                    curr_cost = calculate_cost()
+                    if curr_cost < curr_min_cost:
+                      curr_min_cost = curr_cost
+                      best_schedule = schedule.copy()
+
+                    return False
                 
                 next = sorted(range(N), key=lambda i: (get_shifts(i, day+1).bit_count(), i >= Ns))
                 
@@ -81,7 +107,6 @@ def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, cur
                     return True
                 
         return False
-    
     nurse = nurses_mrv[nurse_idx]
     not_on_leave = 1-on_leave[nurse*D + day]
     
@@ -224,7 +249,7 @@ def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, cur
         avail[nurse] += (s != 0) + (s == 4)
         schedule[nurse*D + day] = -1
         streak[nurse] = prev_streak
-        
+      
     return False
     
 
@@ -254,12 +279,13 @@ if __name__ == '__main__':
     output_file = sys.argv[2]
     result = {}
     start_time = time.time()
-    if solve(0,0,nurses,m,a,e,0,surgical_avail[0],max_shifts*N,gen_avail[0]) :
+    solve(0,0,nurses,m,a,e,0,surgical_avail[0],max_shifts*N,gen_avail[0])
+    if curr_min_cost<1e9 :
         end_time=time.time()
         print(end_time-start_time)
         for day in range(D):
             for nurse in range(N):
-                shift = schedule[nurse*D + day]
+                shift = best_schedule[nurse*D + day]
                 result[f"N{nurse}_{day}"] = shift_int_str(shift)      
     with open(output_file, 'w') as f:
         json.dump(result, f)
