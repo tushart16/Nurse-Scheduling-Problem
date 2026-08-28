@@ -36,6 +36,9 @@ avail = [max_shifts]*N
 streak = [0]*N
 curr_min_cost = 1e9
 best_schedule = [-1]*(N*D)
+done_m = [0]*(N)
+done_a = [0]*(N)
+done_e = [0]*(N)
 
 #RMAEB, R->0, M->1, A->2, E->3, B->4 , the corresponding bitmask is 2^(i)
 def get_shifts(nurse, day) :
@@ -85,7 +88,24 @@ def calculate_cost():
     cost += 3*(m_cnt ** 2 + a_cnt ** 2 + e_cnt ** 2) - (m_cnt+a_cnt+e_cnt) ** 2
   return cost
   
-  
+def shift_preference_order(s, nurse):
+    next_m = done_m[nurse] + (s==1 or s==4)
+    next_a = done_a[nurse] + (s==2 or s==4)
+    next_e = done_e[nurse] + (s==3)
+    tmp_cost = (next_m - next_a)**2 + (next_a - next_e)**2 + (next_e - next_m)**2
+    # hospital_need = 0
+    # if s == 1:
+    #     hospital_need = m_left
+    # elif s == 2:
+    #     hospital_need = a_left
+    # elif s == 3:
+    #     hospital_need = e_left
+    # elif s == 4:
+    #     hospital_need = m_left + a_left
+        
+    return tmp_cost
+    # return (-hospital_need,tmp_cost)
+
 def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, curr_s, curr_surg_left, avail_shifts_sum, curr_gen_left) : 
     global  curr_min_cost,best_schedule
     if time.time() - start_time > 60:
@@ -93,12 +113,45 @@ def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, cur
     if nurse_idx == N :
         if curr_m_left == 0 and curr_a_left == 0 and curr_e_left == 0 :
             if surgical_day[day] == curr_s :
+            # check if the current assignment + optimal future ones shall be better than optimal cost or not
+                tmpcost = 0
+                for nurse in range(0,N):
+                    curr = [done_m[nurse],done_a[nurse],done_e[nurse]]
+                    curr.sort()
+                    tmp_a = curr[0] 
+                    tmp_b = curr[1]
+                    tmp_c = curr[2]
+                    k = avail[nurse] # try distributing k in most optimal manner to all
+                    df1 = min(k, tmp_b-tmp_a)
+                    tmp_a += df1
+                    k -= df1
+                    if k > 0:
+                        df2 = min(k, 2*(tmp_c - tmp_b ))
+                        if df2%2 == 1:
+                            tmp_a += df2//2
+                            tmp_b += (df2+1)//2
+                            k=0
+                        else:
+                            k -= df2
+                            tmp_a += df2/2
+                            tmp_b += df2/2
+                        if k > 0:
+                            tmp_a += k//3
+                            tmp_b += k//3
+                            tmp_c += k//3
+                            k = k%3
+                            tmp_a += (k>0)
+                            tmp_b += (k>1)
+                    tmpcost +=  3*(tmp_a ** 2 + tmp_b ** 2 + tmp_c ** 2) - (tmp_a + tmp_b + tmp_c ) ** 2 
+                if tmpcost >= curr_min_cost:
+                    return False                         
                 if day == D - 1: 
                     curr_cost = calculate_cost()
                     if curr_cost < curr_min_cost:
                       curr_min_cost = curr_cost
                       best_schedule = schedule.copy()
-
+                      if curr_min_cost == 0:
+                          return True # stop searching as global minima achieved
                     return False
                 
                 next = sorted(range(N), key=lambda i: (get_shifts(i, day+1).bit_count(), i >= Ns))
@@ -129,7 +182,7 @@ def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, cur
             streak[nurse] = prev_streak
             return False
     
-    total_nurses = curr_surg_left + curr_gen_left
+    total_nurses_left = curr_surg_left + curr_gen_left
     shifts = get_shifts(nurse,day)
     check_shifts = []
     
@@ -137,7 +190,7 @@ def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, cur
     if avail_shifts_sum < net_shifts_req:
         return False
     
-    if curr_m_left > total_nurses or curr_a_left > total_nurses or curr_e_left > total_nurses:
+    if curr_m_left > total_nurses_left or curr_a_left > total_nurses_left or curr_e_left > total_nurses_left:
         return False
     
     if curr_a_left+curr_e_left+curr_m_left > (curr_surg_left*(1+surgical_day[day])+ curr_gen_left) :
@@ -146,10 +199,10 @@ def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, cur
     if surgical_day[day] == 1 and curr_s == 0 and curr_surg_left == 0:
         return False
     
-    if total_nurses-curr_e_left < curr_m_left + curr_a_left and (curr_m_left == 0 or curr_a_left == 0 or surgical_day[day] == 0 or curr_surg_left == 0) :
+    if total_nurses_left-curr_e_left < curr_m_left + curr_a_left and (curr_m_left == 0 or curr_a_left == 0 or surgical_day[day] == 0 or curr_surg_left == 0) :
         return False
     
-    if curr_e_left == total_nurses and not_on_leave :
+    if curr_e_left == total_nurses_left and not_on_leave :
         if (shifts&8) : check_shifts.append(3)
     else :
         ev_slots = min(curr_gen_left+(is_surgical)*(not_on_leave),curr_e_left)
@@ -163,7 +216,7 @@ def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, cur
         ev_slots = min(curr_gen_left-(is_general)*(not_on_leave),curr_e_left)
         surg_nurse_ma = curr_surg_left - (is_surgical)*(not_on_leave) - (curr_e_left-ev_slots)
         ma_slots = (curr_gen_left - (is_general)*(not_on_leave) - ev_slots) + surg_nurse_ma*(1+surgical_day[day])
-        if (total_nurses - (not_on_leave) >= curr_e_left) and ma_slots >= curr_m_left + curr_a_left :
+        if (total_nurses_left - (not_on_leave) >= curr_e_left) and ma_slots >= curr_m_left + curr_a_left :
             check_shifts.append(0)
             
         if curr_e_left >= max(curr_m_left, curr_a_left) :
@@ -209,6 +262,8 @@ def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, cur
             
         if 4 not in check_shifts and (shifts&16) and curr_m_left > 0 and curr_a_left > 0 :
             check_shifts.append(4)
+
+    check_shifts.sort(key = lambda s: shift_preference_order(s, nurse)) # sort prefered shifts by least cost to most
     
     for s in check_shifts :
         prev_streak = streak[nurse]
@@ -229,15 +284,20 @@ def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, cur
             streak[nurse] += 1
             if s == 1 :
                 next_curr_m_left -= 1
+                done_m[nurse] += 1
             elif s == 2 :
                 next_curr_a_left -= 1
+                done_a[nurse] += 1
             elif s == 3 :
                 next_curr_e_left -= 1
+                done_e[nurse] += 1
             else :
                 next_curr_m_left -= 1
                 next_curr_a_left -= 1
                 avail[nurse] -= 1
                 next_avail_shifts_sum -= 1
+                done_m[nurse] += 1
+                done_a[nurse] += 1
 
         next_curr_s = curr_s
         if s == 4 :
@@ -249,6 +309,9 @@ def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, cur
         avail[nurse] += (s != 0) + (s == 4)
         schedule[nurse*D + day] = -1
         streak[nurse] = prev_streak
+        done_m[nurse] -= (s==1 or s==4)
+        done_a[nurse] -= (s==2 or s==4)
+        done_e[nurse] -= (s==3)
       
     return False
     
