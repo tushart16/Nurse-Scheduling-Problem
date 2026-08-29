@@ -1,0 +1,8 @@
+python3 part_a.py ./sample_test_cases/test1.csv ./outputs/test1.json
+python3 verifier.py ./sample_test_cases/test1.csv ./outputs/test1.json
+
+python3 part_a.py ./sample_test_cases/test2.csv ./outputs/test2.json
+python3 verifier.py ./sample_test_cases/test2.csv ./outputs/test2.json
+
+python3 part_a.py ./sample_test_cases/test3.csv ./outputs/test3.json
+python3 verifier.py ./sample_test_cases/test3.csv ./outputs/test3.json
