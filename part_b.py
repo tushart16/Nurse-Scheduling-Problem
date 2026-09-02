@@ -36,15 +36,6 @@ def get_shifts(nurse, day) :
         shifts |= 4
         
     return shifts
-
-# def get_priority(nurse,shifts) :
-#     if(shifts&16) : p = 4
-#     elif(shifts&2) : p = 3
-#     elif(shifts&4) : p = 2
-#     elif(shifts&8) : p = 1
-#     else : p = 0
-    
-#     return (-p,-avail[nurse],streak[nurse])
     
 def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, curr_b_left, curr_surg_left, avail_shifts_sum, curr_gen_left, offer_m, offer_a, offer_e, offer_b) :    
     if nurse_idx == N :
@@ -65,7 +56,7 @@ def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, cur
             if can_e+can_a+can_m+can_b < e or can_a+can_m+can_b<a or can_m+can_b<m :
                 return False
 
-            surg_cap = sum(avail[i] // 2 for i in range(Ns))
+            surg_cap = sum(avail[i]//2 for i in range(Ns))
             if surg_cap < rem_surg_d[day+1]:
                 return False
             
