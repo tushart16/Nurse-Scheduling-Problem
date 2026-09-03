@@ -249,6 +249,8 @@ def restart() :
             nurse_k[n2] += (s != 0) + (s == 4) - (s2 != 0) - (s2 == 4)
             
 def local_search() :
+    if N < 2:
+      return
     for n in range(N) :
         for d in range(D) :
             s = schedule[n*D + d]
@@ -374,7 +376,7 @@ if __name__ == '__main__':
     
     sn = 0
     for n in range(0,Ns) :
-        if surgical_day[0] == 1 and avail[n] >= 2 and on_leave[n*D + d] == 0:
+        if surgical_day[0] == 1 and avail[n] >= 2 and on_leave[n*D] == 0:
           sn += 1
         for d in range(0,D) :
             surgical_avail[d] -= on_leave[n*D+d]
@@ -386,7 +388,7 @@ if __name__ == '__main__':
     result = {}
     start_time = time.time()
     
-    bposs = range(1,min(m,a,Ns)+1) if surgical_day[0] else [0] 
+    bposs = range(1,min(m,a,Ns,sn)+1) if surgical_day[0] else [0] 
         
     shift_int_str = ['R','M','A','E','B']
     
