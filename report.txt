@@ -1,0 +1,46 @@
+2024CS50052, 2024CS50554
+
+1. Problem Formulation as a CSP
+We model the nurse rostering problem as a Constraint Satisfaction Problem (CSP) defined by:
+- Variables: A 2D grid of variables X[n][d], representing the assignment of nurse n on day d, where n in {0, ..., N-1} and d in {0, ..., D-1}.
+- Domains: For surgical nurses (n < N_s), the initial domain is {R, M, A, E, B}. For general nurses (n >= N_s), the domain is restricted to {R, M, A, E}. For any day a nurse is on pre-approved leave, the domain immediately reduces to the singleton {R}.
+
+2. Part A: Deterministic Constraint Satisfaction Search
+To find a valid roster efficiently, we augmented standard depth-first search with variable ordering heuristics, value ordering, and forward checking.
+
+2.1 Variable and Value Ordering Heuristics
+- Variable Ordering: Nurses are scheduled on a day-by-day basis. Across days, we prioritize nurses using a dynamic degree and capacity heuristic, ordering nurses by their remaining shift capacity (K budget). Nurses with tighter constraints and fewer available shifts are assigned earlier to fail fast and prevent late-stage capacity exhaustion.
+- Value Ordering: We exploit the domain structure of the problem. A nurse capable of taking a surgical shift (B) possesses the highest flexibility, followed by those capable of working M, A, and E. To avoid prerequisite starvation on surgical days, we prioritize values in order of restrictiveness: B -> M -> A -> E -> R. This ensures that scarce slots (such as the mandatory B shift on surgical days) are fulfilled before versatile nurses are consumed by easier assignments.
+
+2.2 Inference and Pruning (Forward Checking & Capacity Bounds)
+At each assignment node, we enforce forward checking to prune infeasible subtrees:
+- Daily Shift Balance: We track the remaining requirements (curr_m, curr_a, curr_e, curr_b) against the remaining unassigned nurses. If the remaining workforce cannot mathematically fulfill the shift demands, the branch is pruned immediately.
+- Global Capacity Bounding: We maintain the sum of all remaining shift allowances across all nurses. At any point, if the total remaining capacity is strictly less than the total shifts required for the remainder of the scheduling horizon, the solver backtracks.
+- Surgical Lookahead: On surgical days, we verify that at least one surgical nurse with sufficient remaining capacity (at least 2 shifts) can legally take shift B. Furthermore, we compute the cumulative remaining surgical shifts across all future surgical days and prune if the total surgical capacity cannot support them.
+- Next-Day Availability Lookahead: Before committing to a day's schedule, we pre-evaluate the available shift offers for the following day. If the count of eligible nurses for any shift type falls below the required threshold, the current day configuration is rejected.
+
+3. Part B: Two-Phase Architecture (CSP Baseline + Local Search)
+Our solution comprises of a 2-step approach:
+- Phase 1: Rapidly construct a fully valid baseline roster using the Part A CSP solver.
+- Phase 2: Optimize the roster using an iterative local search that explores the space of valid solutions.
+
+3.1 Invariant-Preserving Neighborhood Definition
+The local search operates on pairwise shift swaps between two nurses on the same day. Swapping shifts on the same day guarantees that the exact daily staffing counts (H4) and surgical coverage (H7) are strictly preserved by construction.
+
+For any proposed swap between nurse n1 and nurse n2 on day d:
+- We check that pre-approved leaves (H9) and surgical role requirements (H1) are respected.
+- We check that neither nurse exceeds the total shift allowance K (H8).
+- We perform O(1) checks on adjacent days (d-1 and d+1) to ensure valid shift transitions (H2, H3, H6).
+- We verify that switching between working shifts and rest shifts does not violate the 5-consecutive-day limit (H5) by checking the contiguous working run to the left and right of day d.
+
+3.2 Cost Evaluation and Delta Updates
+The objective function penalizes variance across shift types:
+Cost = 3 * (M^2 + A^2 + E^2) - (M + A + E)^2
+Because a swap only modifies the assignments of two nurses, we compute the cost change (delta) locally in O(1) time by subtracting the old variance contribution of n1 and n2 and adding their new variance contribution. The global cost is updated incrementally without rescanning the schedule matrix.
+
+3.3 Search Strategy and Escaping Local Minima
+- Targeted Candidate Selection: Instead of uniform random sampling, we rank nurses by their individual variance penalty. We select the nurse with the most imbalanced schedule and locate a partner on a day where trading a surplus shift for a deficit shift directly reduces individual variance.
+- Sideways Moves: When strictly improving moves are unavailable, we allow sideways moves (delta <= 0). This allows the search to traverse flat cost plateaus without getting trapped.
+- Random Restarts: If the search stagnates over many iterations, the “restart” function executes a sequence of random valid swaps across random days. This displaces the search from local minima and allows it to explore alternative regions of the feasible space.
+- Time-Budget Management: The local search runs continuously, tracking the best schedule found so far, and terminates safely within the provided time limit T, returning an optimal or near-optimal roster.
+
