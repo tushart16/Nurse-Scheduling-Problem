@@ -56,7 +56,12 @@ def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, cur
             if can_e+can_a+can_m+can_b < e or can_a+can_m+can_b<a or can_m+can_b<m :
                 return False
 
-            surg_cap = sum(avail[i]//2 for i in range(Ns))
+            net_shifts_req = (D-1-day)*(m+a+e)
+            total_avail = sum(avail[i] for i in range(N))
+            if total_avail < net_shifts_req:
+                return False
+            
+            surg_cap = sum((avail[i]//2) for i in range(Ns))
             if surg_cap < rem_surg_d[day+1]:
                 return False
             
@@ -177,7 +182,7 @@ def allowed(s1, s2) :
         return ((s1 == 2) or (s1 == 0)) 
     return (s1 != 4)
 
-def verify_streak(n,day,s) :
+def streak_check(n,day,s) :
     if s == 0 :
         return True
     
@@ -213,14 +218,14 @@ def valid(n,d,s1,s2) :
     if d < D - 1 and not allowed(s2, schedule[n*D+d+1]) :
         return False
     
-    if s1 == 0 and s2 != 0 and not verify_streak(n, d, s2) :
+    if s1 == 0 and s2 != 0 and not streak_check(n, d, s2) :
         return False
     return True
 
 def restart() :
-    swaps = 4
+    swaps = 5
     tried = 0
-    while swaps > 0 and tried < 120 :
+    while swaps > 0 and tried < 150 :
         tried += 1
         d = random.randint(0,D-1)
         n1,n2 = random.sample(range(N),2)
@@ -243,8 +248,6 @@ def restart() :
             nurse_k[n1] += (s2 != 0) + (s2 == 4) - (s != 0) - (s == 4)
             nurse_k[n2] += (s != 0) + (s == 4) - (s2 != 0) - (s2 == 4)
             
-            
-
 def local_search() :
     for n in range(N) :
         for d in range(D) :
@@ -263,7 +266,7 @@ def local_search() :
     bad_max = 3000
     bad_count = 0
         
-    while time.time()-start_time < 2 :
+    while time.time()-start_time < (T-0.61) :
         if best_cost == 0 :
             break
         
@@ -348,6 +351,9 @@ if __name__ == '__main__':
        
     N, D, Ns, Ng, m, a, e, T, days, max_shifts, leaves = parse_input(sys.argv[1])
     output_file = sys.argv[2]
+    
+    with open(output_file, 'w') as f:
+        json.dump({}, f)
     
     surgical_day = [1 if d == 'S' else 0 for d in days]
     on_leave = [1 if a == 'L' else 0 for a in leaves]

@@ -36,7 +36,7 @@ def get_shifts(nurse, day) :
         
     return shifts
     
-def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, curr_b_left, curr_surg_left, avail_shifts_sum, curr_gen_left, offer_m, offer_a, offer_e, offer_b) :    
+def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, curr_b_left, curr_surg_left, avail_shifts_sum, curr_gen_left, offer_m, offer_a, offer_e, offer_b) : 
     if nurse_idx == N :
         if curr_m_left == 0 and curr_a_left == 0 and curr_e_left == 0 and curr_b_left == 0 :
             if day == D - 1: 
@@ -55,7 +55,12 @@ def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, cur
             if can_e+can_a+can_m+can_b < e or can_a+can_m+can_b<a or can_m+can_b<m :
                 return False
 
-            surg_cap = sum(avail[i]//2 for i in range(Ns))
+            net_shifts_req = (D-1-day)*(m+a+e)
+            total_avail = sum(avail[i] for i in range(N))
+            if total_avail < net_shifts_req:
+                return False
+            
+            surg_cap = sum((avail[i]//2) for i in range(Ns))
             if surg_cap < rem_surg_d[day+1]:
                 return False
             
@@ -117,9 +122,8 @@ def solve(day, nurse_idx, nurses_mrv, curr_m_left, curr_a_left, curr_e_left, cur
             check_shifts.append(2)
         if (shifts&8) and curr_e_left > 0:
             check_shifts.append(3)
-                                    
         if total_nurses - 1 >= curr_m_left + curr_a_left + curr_e_left + curr_b_left:
-            check_shifts.append(0)
+            check_shifts.append(0)                                
     else :
         check_shifts.append(0) 
     
@@ -183,6 +187,9 @@ if __name__ == '__main__':
     N, D, Ns, Ng, m, a, e, T, days, max_shifts, leaves = parse_input(sys.argv[1])
     output_file = sys.argv[2]
     
+    with open(output_file, 'w') as f:
+        json.dump({}, f)
+    
     surgical_day = [1 if d == 'S' else 0 for d in days]
     on_leave = [1 if a == 'L' else 0 for a in leaves]
     surgical_avail = [Ns]*D
@@ -194,14 +201,6 @@ if __name__ == '__main__':
     for d in range(D-1,-1,-1) :
         count += (surgical_day[d] == 1)
         rem_surg_d[d] = count
-        
-    rem_work_d = [[0]*(N) for _ in range(D)]
-        
-    for d in range(D-1,-1,-1) :
-        for i in range(N) :
-            rem_work_d[d][i] = (1 - on_leave[i*D+d])
-            if(d+1<D) :
-                rem_work_d[d][i] += rem_work_d[d+1][i]
 
     avail = [max_shifts]*N
     streak = [0]*N 
