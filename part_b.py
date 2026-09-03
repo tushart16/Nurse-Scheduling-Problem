@@ -275,6 +275,9 @@ def local_search() :
         if flat_count >= flat_max or bad_count >= bad_max :
             restart()
             current_cost = total_cost()
+            if current_cost < best_cost:
+                best_cost = current_cost
+                best_schedule = list(schedule)
             flat_count = 0
             bad_count = 0
             continue
