@@ -374,7 +374,8 @@ if __name__ == '__main__':
     
     sn = 0
     for n in range(0,Ns) :
-        if surgical_day[0] == 1 and avail[n] >= 2 : sn += 1
+        if surgical_day[0] == 1 and avail[n] >= 2 and on_leave[n*D + d] == 0:
+          sn += 1
         for d in range(0,D) :
             surgical_avail[d] -= on_leave[n*D+d]
             
